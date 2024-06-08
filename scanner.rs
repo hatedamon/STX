@@ -5,34 +5,19 @@ use winapi::um::handleapi::CloseHandle;
 use winapi::um::tlhelp32::{
     CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
 };
+use winapi::um::winuser::{FindWindowW, GetWindowThreadProcessId};
 
-pub fn get_pid(exe_name: &str) -> Option<u32> {
-    log::info!("creating snapshot for processes");
-    let snap = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
-    if snap == winapi::um::handleapi::INVALID_HANDLE_VALUE {
-        log::error!("failed to create process snapshot");
+pub fn pid_wind(window_name: &str) -> Option<u32> {
+    log::info!("finding window with name: {}", window_name);
+    let hwnd = unsafe { FindWindowW(std::ptr::null(), window_name.as_ptr() as *const u16) };
+    if hwnd.is_null() {
+        log::error!("failed to find window with name: {}", window_name);
         return None;
     }
-
-    let mut pe32: PROCESSENTRY32 = unsafe { std::mem::zeroed() };
-    pe32.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
-    let mut pid = None;
-
-    if unsafe { Process32First(snap, &mut pe32) } == winapi::shared::minwindef::TRUE {
-        loop {
-            let exe_name_cstr = unsafe { std::ffi::CStr::from_ptr(pe32.szExeFile.as_ptr()) }
-                .to_str()
-                .unwrap();
-            log::info!("found process: {}", exe_name_cstr);
-            if exe_name_cstr == exe_name {
-                pid = Some(pe32.th32ProcessID);
-                break;
-            }
-            if unsafe { Process32Next(snap, &mut pe32) } == winapi::shared::minwindef::FALSE {
-                break;
-            }
-        }
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(hwnd, &mut pid);
     }
-    unsafe { CloseHandle(snap) };
-    pid
+    log::info!("found target: {}", pid);
+    Some(pid)
 }
